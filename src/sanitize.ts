@@ -22,3 +22,14 @@ export function renderLine(ad: Ad): string {
   }
   return sentence
 }
+
+// loginNotice is the sign-in line shown in place of an ad when the device token was
+// rejected. It tells the user that authentication failed (with the reason, when known)
+// and how to fix it. loginCmd is the CLI login command that writes the shared config
+// the plugin reads (default "vibeperks login").
+export function loginNotice(reason = "", loginCmd = "vibeperks login"): string {
+  const cleanReason = sanitize(reason)
+  const cmd = sanitize(loginCmd)
+  const notice = cleanReason ? `VibePerks: ${cleanReason}` : "VibePerks: sign-in required"
+  return cmd ? `${notice} - run: ${cmd}` : notice
+}

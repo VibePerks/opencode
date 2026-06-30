@@ -35,7 +35,7 @@ function fakeKv(): Kv & { store: Map<string, unknown> } {
 // harness wires a real VibePerksClient over a programmable fetch so the engine is
 // tested against the actual client behaviour (status mapping, retry).
 function harness() {
-  const serveQueue: (Ad | null | "error")[] = []
+  const serveQueue: (Ad | null | "error" | "unauthorized")[] = []
   const impressionStatuses: number[] = []
   const delivered: Impression[] = []
   let serveCalls = 0
@@ -46,6 +46,7 @@ function harness() {
       serveCalls++
       const next = serveQueue.shift()
       if (next === "error") throw new Error("network down")
+      if (next === "unauthorized") return new Response(null, { status: 401 })
       if (next == null) return new Response(null, { status: 204 })
       return new Response(JSON.stringify(next), { status: 200 })
     }
@@ -191,6 +192,42 @@ describe("engine serve failure", () => {
     const s = await loadState(kv)
     expect(s.ad?.ad_id).toBe("a1") // prior ad preserved
     expect(s.recorded).toBe(true)
+  })
+})
+
+describe("engine unauthorized token", () => {
+  it("flags needsLogin, clears the ad, and does not throw when the token is rejected", async () => {
+    const kv = fakeKv()
+    const h = harness()
+    await seedState(kv, ad(), 1000, false) // a previously served, unrecorded ad
+    h.serveQueue.push("unauthorized")
+
+    await expect(onBusy(kv, h.client, CFG, META, 22000)).resolves.toBeUndefined()
+    const s = await loadState(kv)
+    expect(s.needsLogin).toBe(true)
+    expect(s.needsLoginReason).toBe("device token invalid or revoked")
+    expect(s.ad).toBeNull()
+    // the prior impression is still flushed
+    expect(h.delivered).toHaveLength(1)
+    expect(h.delivered[0].impression_token).toBe("imp1")
+  })
+
+  it("clears needsLogin once a serve succeeds again", async () => {
+    const kv = fakeKv()
+    const h = harness()
+    await kv.set("vibeperks:state", {
+      ad: null,
+      servedAt: 0,
+      recorded: false,
+      rotateCount: 0,
+      needsLogin: true,
+    })
+    h.serveQueue.push(ad({ ad_id: "a2", impression_token: "imp2" }))
+
+    await onBusy(kv, h.client, CFG, META, 1000, true)
+    const s = await loadState(kv)
+    expect(s.needsLogin).toBeFalsy()
+    expect(s.ad?.ad_id).toBe("a2")
   })
 })
 

@@ -1,9 +1,12 @@
 // UnauthorizedError means the device token was rejected (401/403). Retrying with
-// the same token will not help; the user must re-link the device.
+// the same token will not help; the user must re-link the device. `reason` is a
+// short, user-facing explanation (e.g. "device token invalid or revoked").
 export class UnauthorizedError extends Error {
-  constructor() {
+  readonly reason: string
+  constructor(reason = "") {
     super("device token unauthorized")
     this.name = "UnauthorizedError"
+    this.reason = reason
   }
 }
 

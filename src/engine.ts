@@ -123,6 +123,22 @@ export async function onBusy(
   try {
     ad = await client.serve()
   } catch (e) {
+    // A rejected device token is terminal: clear the cached ad and flag the slot so
+    // the footer shows a sign-in notice. This is a handled outcome, not an error to
+    // surface, so the footer can repaint from the saved state.
+    if (e instanceof Error && e.name === "UnauthorizedError") {
+      const reason = (e as { reason?: string }).reason ?? ""
+      await saveState(kv, {
+        ad: null,
+        servedAt: 0,
+        recorded: false,
+        rotateCount: 0,
+        needsLogin: true,
+        needsLoginReason: reason,
+      })
+      await flush(kv, client)
+      return
+    }
     // Keep the buffered impression and the recorded flag; surface the serve error
     // (the plugin entry boundary swallows it so OpenCode is unaffected).
     await saveState(kv, s)

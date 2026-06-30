@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { renderLine, sanitize } from "../src/sanitize"
+import { loginNotice, renderLine, sanitize } from "../src/sanitize"
 import type { Ad } from "../src/types"
 
 function ad(over: Partial<Ad> = {}): Ad {
@@ -48,5 +48,27 @@ describe("renderLine", () => {
 
   it("sanitizes control bytes injected into the sentence or domain", () => {
     expect(renderLine(ad({ sentence: "evil\u001b[31m", domain: "x.com" }))).toBe("evil[31m - x.com")
+  })
+})
+
+describe("loginNotice", () => {
+  it("includes the sign-in prompt and the default login command", () => {
+    const got = loginNotice()
+    expect(got).toContain("VibePerks")
+    expect(got).toContain("vibeperks login")
+  })
+
+  it("surfaces the rejection reason when given", () => {
+    const got = loginNotice("account suspended")
+    expect(got).toContain("account suspended")
+    expect(got).toContain("vibeperks login")
+  })
+
+  it("uses a custom login command when given", () => {
+    expect(loginNotice("", "vibeperks-x login")).toContain("run: vibeperks-x login")
+  })
+
+  it("omits the run hint when the command is empty", () => {
+    expect(loginNotice("", "")).not.toContain("run:")
   })
 })

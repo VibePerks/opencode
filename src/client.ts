@@ -5,6 +5,13 @@ import type { Ad, Impression } from "./types"
 // A hard per-request timeout so a slow or hung backend can never stall OpenCode.
 const HTTP_TIMEOUT_MS = 5000
 
+// authReason maps a rejection status to a short, user-facing reason. The backend
+// returns 403 only for a suspended account and 401 for an invalid/revoked/unknown
+// token, so the status alone is an accurate reason (no guessing).
+function authReason(status: number): string {
+  return status === 403 ? "account suspended" : "device token invalid or revoked"
+}
+
 // FetchFn is the fetch contract; injected so tests run with no real network.
 export type FetchFn = typeof fetch
 
@@ -36,7 +43,8 @@ export class VibePerksClient {
       ad.domain = sanitize(ad.domain)
       return ad
     }
-    if (res.status === 401 || res.status === 403) throw new UnauthorizedError()
+    if (res.status === 401 || res.status === 403)
+      throw new UnauthorizedError(authReason(res.status))
     throw new Error(`serve: unexpected status ${res.status}`)
   }
 
@@ -51,7 +59,8 @@ export class VibePerksClient {
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     })
     if (res.status === 200 || res.status === 201) return
-    if (res.status === 401 || res.status === 403) throw new UnauthorizedError()
+    if (res.status === 401 || res.status === 403)
+      throw new UnauthorizedError(authReason(res.status))
     if (res.status >= 400 && res.status < 500) throw new RejectedError()
     throw new Error(`impression: unexpected status ${res.status}`)
   }

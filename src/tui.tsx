@@ -31,7 +31,7 @@ import { createSignal, Show, type Accessor } from "solid-js"
 import { VibePerksClient } from "./client"
 import { loadConfig } from "./config"
 import { onBusy, onIdle, type Meta } from "./engine"
-import { renderLine } from "./sanitize"
+import { loginNotice, renderLine } from "./sanitize"
 import { loadState, type Kv } from "./store"
 
 const id = "vibeperks.sponsor"
@@ -43,17 +43,30 @@ function nowMs(): number {
 
 // ---- view ----------------------------------------------------------------
 
-function SponsorLine(props: { api: TuiPluginApi; line: Accessor<string | undefined> }) {
+function SponsorLine(props: {
+  api: TuiPluginApi
+  line: Accessor<string | undefined>
+  needsLogin: Accessor<boolean>
+  needsLoginReason: Accessor<string>
+}) {
   const theme = () => props.api.theme.current
   return (
     <box width="100%" paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={1}>
-      <Show when={props.line()} fallback={<text fg={theme().textMuted}>vibeperks</text>}>
-        {(l) => (
-          <box flexDirection="row" flexShrink={1} gap={1}>
-            <text fg={theme().textMuted}>sponsored</text>
-            <text fg={theme().text}>{l()}</text>
-          </box>
-        )}
+      <Show
+        when={props.needsLogin()}
+        fallback={
+          <Show when={props.line()} fallback={<text fg={theme().textMuted}>vibeperks</text>}>
+            {(l) => (
+              <box flexDirection="row" flexShrink={1} gap={1}>
+                <text fg={theme().textMuted}>sponsored</text>
+                <text fg={theme().text}>{l()}</text>
+              </box>
+            )}
+          </Show>
+        }
+      >
+        {/* Sign-in notice: plain, non-bold theme text - distinct from a paid ad. */}
+        <text fg={theme().text}>{loginNotice(props.needsLoginReason())}</text>
       </Show>
     </box>
   )
@@ -72,9 +85,13 @@ const tui: TuiPlugin = async (api, options) => {
   const hasToken = cfg.deviceToken !== ""
 
   const [line, setLine] = createSignal<string | undefined>(undefined)
+  const [needsLogin, setNeedsLogin] = createSignal(false)
+  const [needsLoginReason, setNeedsLoginReason] = createSignal("")
 
   async function syncLine() {
     const s = await loadState(kv)
+    setNeedsLogin(s.needsLogin === true)
+    setNeedsLoginReason(s.needsLoginReason ?? "")
     setLine(s.ad ? renderLine(s.ad) : undefined)
   }
 
@@ -163,7 +180,14 @@ const tui: TuiPlugin = async (api, options) => {
     order: 1000,
     slots: {
       app_bottom() {
-        return <SponsorLine api={api} line={line} />
+        return (
+          <SponsorLine
+            api={api}
+            line={line}
+            needsLogin={needsLogin}
+            needsLoginReason={needsLoginReason}
+          />
+        )
       },
     },
   })

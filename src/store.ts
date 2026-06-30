@@ -12,11 +12,15 @@ export interface Kv {
 // `recorded` prevents double-counting one ad across the busy/idle transitions;
 // `rotateCount` is how many automatic rotations have happened since the last
 // prompt, so a session that stays busy rotates at most a few times then stops.
+// `needsLogin` is set when the device token was rejected (401/403) so the footer
+// shows a sign-in notice instead of an ad.
 export interface AdState {
   ad: Ad | null
   servedAt: number
   recorded: boolean
   rotateCount: number
+  needsLogin?: boolean
+  needsLoginReason?: string
 }
 
 const STATE_KEY = "vibeperks:state"
