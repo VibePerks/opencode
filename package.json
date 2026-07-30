@@ -1,0 +1,46 @@
+{
+  "name": "@vibeperks/opencode",
+  "version": "0.1.0",
+  "description": "VibePerks sponsor unit for OpenCode - one quiet sponsor line in the TUI footer that earns you credit while your agent works.",
+  "type": "module",
+  "license": "PolyForm-Shield-1.0.0",
+  "homepage": "https://vibeperks.ai",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    "./tui": "./src/tui.tsx"
+  },
+  "engines": {
+    "opencode": ">=1.17.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.17.0",
+    "@opentui/solid": ">=0.3.4",
+    "solid-js": ">=1.8.0"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "vibeperks",
+    "sponsor"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:tui": "tsc -p tsconfig.tui.json --noEmit",
+    "test": "vitest run",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,50 @@
+name: Release npm package
+
+# Publishes @vibeperks/opencode to npm so that `opencode plugin @vibeperks/opencode`
+# always resolves to the freshest package. This workflow lives at the root of the
+# public VibePerks/opencode repo, into which plugin/opencode/native/ is mirrored by
+# the monorepo's scripts/git-push-main.ps1. It is dormant inside the monorepo
+# (only root-level .github/workflows run there). Publishing is gated on the
+# version in package.json changing, so a re-push with the same version is a no-op.
+on:
+  # Dispatch-only: triggered by the monorepo CI/CD release-plugins job after
+  # every test gate passes. Auto-trigger on push removed so an untested mirror
+  # push can never publish binaries.
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # npm Trusted Publishing (OIDC) - no stored token needed
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Update npm to a Trusted Publishing capable release
+        run: npm install -g npm@latest
+
+      - name: Publish if version is new
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION already published; skipping."
+          else
+            npm publish
+          fi
