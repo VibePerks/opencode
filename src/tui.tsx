@@ -30,9 +30,10 @@ import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plug
 import { createSignal, Show, type Accessor } from "solid-js"
 import { VibePerksClient } from "./client"
 import { loadConfig } from "./config"
-import { onBusy, onIdle, type Meta } from "./engine"
+import { onBusy, onIdle, rotationIntervalMs, type Meta } from "./engine"
 import { loginNotice, renderLine } from "./sanitize"
 import { loadState, type Kv } from "./store"
+import { HOUSE_AD_COPY } from "./types"
 
 const id = "vibeperks.sponsor"
 const PLUGIN_VERSION = "0.1.0"
@@ -104,10 +105,14 @@ const tui: TuiPlugin = async (api, options) => {
     setNeedsLoginReason(s.needsLoginReason ?? "")
     const resetAt = s.tryAgainAt ? Date.parse(s.tryAgainAt) : Number.NaN
     if (!Number.isNaN(resetAt) && resetAt > nowMs()) {
-      // Earning cap active: show a subtle paused line instead of an ad.
-      const mins = Math.max(1, Math.ceil((resetAt - nowMs()) / 60000))
+      // Earning cap active: show the house ad sentence + "more ads in hh:mm"
+      // countdown so the publisher knows earning will resume and when.
+      const copy = HOUSE_AD_COPY[s.lang ?? "en"] ?? HOUSE_AD_COPY["en"]
+      const remaining = Math.max(0, resetAt - nowMs())
+      const h = Math.floor(remaining / 3_600_000)
+      const m = Math.floor((remaining % 3_600_000) / 60_000)
       setPaused(true)
-      setPausedText(`vibeperks - limit reached, more ads in ~${mins}m`)
+      setPausedText(`${copy} - more ads in ${h}h ${String(m).padStart(2, "0")}m`)
       setLine(undefined)
     } else {
       setPaused(false)
@@ -137,11 +142,10 @@ const tui: TuiPlugin = async (api, options) => {
   //    error is swallowed so OpenCode is never broken or slowed. No swallowing
   //    happens deeper than this point.
   const active = new Set<string>()
-  // While a session is active the ad refreshes on a fixed billable cadence (a new
-  // serve = one impression) at most every 5 minutes, so a busy session earns at
-  // most 12 ads/hour. The timer is cleared the moment the session goes idle, so an
-  // idle terminal never serves.
-  const BILLABLE_MS = 5 * 60_000
+  // While a session is active the ad refreshes on a paced cadence: one serve every
+  // (3600 / hourly_cap) seconds, so a busy session earns at most hourly_cap ads/hour.
+  // The interval is read from the cached state on each timer arm; the timer is
+  // cleared the moment the session goes idle.
   let rotateTimer: ReturnType<typeof setInterval> | undefined
   function stopRotation() {
     if (rotateTimer) {
@@ -168,6 +172,8 @@ const tui: TuiPlugin = async (api, options) => {
         }
       })()
       stopRotation()
+      const s = await loadState(kv)
+      const interval = rotationIntervalMs(s)
       rotateTimer = setInterval(() => {
         void (async () => {
           try {
@@ -179,7 +185,7 @@ const tui: TuiPlugin = async (api, options) => {
             // fail silent
           }
         })()
-      }, BILLABLE_MS)
+      }, interval)
     } else if (type === "idle") {
       active.delete(sessionID)
       stopRotation()

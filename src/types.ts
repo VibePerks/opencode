@@ -12,6 +12,23 @@ export interface Ad {
   website_url?: string
   impression_token: string
   rotate_seconds: number
+  // The viewer's language (en/es) the ad sentence was rendered in. Used to localize
+  // the house ad fallback when earning-capped.
+  lang?: string
+  // The effective hourly/daily earning caps for this publisher (server-authoritative,
+  // KYC-aware). The client uses hourly_cap to pace rotation: 3600 / hourly_cap
+  // seconds between serves. Omitted by older backends; falls back to 12 (300s).
+  hourly_cap?: number
+  daily_cap?: number
+}
+
+// Localized house ad copy used as a fallback display when earning-capped (the
+// backend returns earning_capped with no ad content, so the plugin shows this
+// sentence + a "more ads in hh:mm" countdown instead). Mirrors _HOUSE_AD in the
+// backend service (ads.py).
+export const HOUSE_AD_COPY: Record<string, string> = {
+  en: "Make your AI pay for itself",
+  es: "Haz que tu IA se pague sola",
 }
 
 // EarningCapped is returned by GET /v1/ads/serve (200) when the publisher has hit

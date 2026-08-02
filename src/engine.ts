@@ -23,11 +23,19 @@ export interface Meta {
 }
 
 const FLUSH_RETRY_DELAY_MS = 200
-// Billable serve cadence: at most one new ad (one impression) every 5 minutes while
-// active, so even a continuously busy session earns at most 12 ads/hour - matching
-// the backend's per-hour earning cap. Between serves the footer keeps showing the
-// cached ad; an idle terminal stops serving entirely (no auto-rotations).
-export const MIN_BILLABLE_INTERVAL_MS = 5 * 60 * 1000
+
+// Fallback hourly cap when the serve response omits the field (older backends).
+// 3600 / 12 = 300s between rotations, matching the pre-cap-field default.
+const DEFAULT_HOURLY_CAP = 12
+
+// rotationIntervalMs returns the paced serve interval for a publisher: one ad
+// every (3600 / hourly_cap) seconds while active, so a continuously busy session
+// earns at most hourly_cap ads/hour. Falls back to 300s (12/hour) when no cap is
+// known (fresh install, old backend).
+export function rotationIntervalMs(state: AdState): number {
+  const cap = state.ad?.hourly_cap ?? DEFAULT_HOURLY_CAP
+  return (3600 / cap) * 1000
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -89,12 +97,11 @@ export async function flush(kv: Kv, client: VibePerksClient): Promise<void> {
   if (firstErr) throw firstErr
 }
 
-// onBusy is the prompt / activity worker. It serves the next billable ad only when
-// there is no ad, or when at least MIN_BILLABLE_INTERVAL_MS has elapsed since the
-// last serve (so serving is paced to <=12/hour). It records the current ad's
-// impression before serving the next, then flushes the buffer. While an earning cap
-// is active it serves nothing until `try_again_at`. Opt-out clears the cached ad and
-// does no network I/O.
+// onBusy is the prompt / rotation worker. It serves the next billable ad only when
+// there is no ad, or when at least rotationIntervalMs have elapsed since the last
+// serve (paced to the publisher's hourly_cap), recording the current ad's impression
+// first, then flushes the buffer. While an earning cap is active it serves nothing
+// until `try_again_at`. Opt-out clears the cached ad and does no network I/O.
 export async function onBusy(
   kv: Kv,
   client: VibePerksClient,
@@ -112,7 +119,8 @@ export async function onBusy(
     await flush(kv, client)
     return
   }
-  const due = !s.ad || now - s.servedAt >= MIN_BILLABLE_INTERVAL_MS
+  const interval = rotationIntervalMs(s)
+  const due = !s.ad || now - s.servedAt >= interval
   if (!due) {
     await flush(kv, client)
     return
@@ -145,14 +153,21 @@ export async function onBusy(
   }
   if (isEarningCapped(result)) {
     // Publisher hit their earning cap: no ad, pause serving until try_again_at.
-    await saveState(kv, { ad: null, servedAt: 0, recorded: false, tryAgainAt: result.try_again_at })
+    // Keep the language so the footer can show the localized house ad + countdown.
+    await saveState(kv, {
+      ad: null,
+      servedAt: 0,
+      recorded: false,
+      tryAgainAt: result.try_again_at,
+      lang: s.lang ?? s.ad?.lang,
+    })
     await flush(kv, client)
     return
   }
   await saveState(
     kv,
     result
-      ? { ad: result, servedAt: now, recorded: false }
+      ? { ad: result, servedAt: now, recorded: false, lang: result.lang }
       : { ad: null, servedAt: 0, recorded: false },
   )
   await flush(kv, client)

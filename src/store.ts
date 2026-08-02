@@ -13,7 +13,8 @@ export interface Kv {
 // `needsLogin` is set when the device token was rejected (401/403) so the footer
 // shows a sign-in notice instead of an ad. `tryAgainAt` is the ISO-8601 UTC time an
 // active earning-cap resets: while it is in the future there is no ad, serving is
-// paused, and the footer shows a countdown.
+// paused, and the footer shows a countdown. `lang` is the viewer's language (en/es)
+// from the last serve response, used to localize the house ad copy when capped.
 export interface AdState {
   ad: Ad | null
   servedAt: number
@@ -21,6 +22,7 @@ export interface AdState {
   needsLogin?: boolean
   needsLoginReason?: string
   tryAgainAt?: string
+  lang?: string
 }
 
 const STATE_KEY = "vibeperks:state"
